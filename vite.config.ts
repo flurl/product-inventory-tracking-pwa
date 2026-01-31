@@ -40,6 +40,7 @@ manifestIcons.push(
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: 'product-inventory-tracking-pwa',
   plugins: [react(), tailwindcss(), viteSingleFile(),
     VitePWA({
       registerType: 'autoUpdate',
