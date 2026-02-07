@@ -58,7 +58,7 @@ export function App() {
     const savedTemplates = localStorage.getItem("productCounter_templates");
     const savedCountsData = localStorage.getItem("productCounter_counts");
     const savedSession = localStorage.getItem("productCounter_session");
-    
+
     if (savedTemplates) {
       setTemplates(JSON.parse(savedTemplates));
     }
@@ -92,7 +92,7 @@ export function App() {
         setSavedCounts([]);
       }
     }
-    
+
     // check for active session to resume
     if (savedSession && !sessionRecovered.current) {
       try {
@@ -138,7 +138,7 @@ export function App() {
       const values: string[] = [];
       let current = "";
       let inQuotes = false;
-      
+
       for (let j = 0; j < line.length; j++) {
         const char = line[j];
         if (char === '"') {
@@ -151,16 +151,16 @@ export function App() {
         }
       }
       values.push(current);
-      
+
       // Trim quotes from values
       const cleanValues = values.map(v => v.trim().replace(/^"|"$/g, ""));
-      
+
       if (cleanValues.length >= 3) {
         const packagingSize = parseFloat(cleanValues[2]);
         if (isNaN(packagingSize)) {
           throw new Error(`Invalid packaging size at row ${i + 1}: "${cleanValues[2]}"`);
         }
-        
+
         products.push({
           id: cleanValues[0],
           name: cleanValues[1],
@@ -169,7 +169,7 @@ export function App() {
         });
       }
     }
-    
+
     // Sort by sortIndex if available
     return products.sort((a, b) => {
       const aIndex = a.sortIndex ?? Infinity;
@@ -186,7 +186,7 @@ export function App() {
     try {
       const text = await file.text();
       const products = parseCSV(text);
-      
+
       if (products.length === 0) {
         setImportError("No valid products found in the CSV file");
         return;
@@ -202,7 +202,7 @@ export function App() {
       setTemplates(prev => [...prev, template]);
       setImportError("");
       setSuccessMessage(`Successfully imported ${products.length} products from "${file.name}"`);
-      
+
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Error parsing CSV file");
@@ -216,13 +216,13 @@ export function App() {
   const addProductToTemplate = () => {
     const id = prompt("Enter Product ID:");
     if (!id) return;
-    
+
     const name = prompt("Enter Product Name:");
     if (!name) return;
-    
+
     const packagingSizeStr = prompt("Enter Packaging Size:");
     if (!packagingSizeStr) return;
-    
+
     const packagingSize = parseFloat(packagingSizeStr);
     if (isNaN(packagingSize) || packagingSize <= 0) {
       alert("Invalid packaging size");
@@ -384,9 +384,9 @@ export function App() {
       .replace(/[:.]/g, "-")
       .replace("T", "_")
       .slice(0, 19);
-    
+
     const filename = `${count.formName}_${dateStr}.csv`;
-    
+
     let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
     count.items.forEach(item => {
       const total = getTotal(item);
@@ -410,9 +410,9 @@ export function App() {
       .replace(/[:.]/g, "-")
       .replace("T", "_")
       .slice(0, 19);
-    
+
     const filename = `${count.formName}_${dateStr}.csv`;
-    
+
     let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
     count.items.forEach(item => {
       const total = getTotal(item);
@@ -485,6 +485,44 @@ export function App() {
         {view === "start" && (
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
+
+              <button
+                onClick={() => {
+                  if (templates.length === 0) {
+                    alert("No templates available. Please import a CSV or create a template first.");
+                    return;
+                  }
+                  setView("count");
+                }}
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-emerald-300 text-lg"
+              >
+                <div className="h-12 w-12 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
+                  <svg className="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-slate-900">Start Counting</div>
+                  <div className="text-sm text-slate-500">Count products from existing templates</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setView("view-counts")}
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-amber-300 text-lg"
+              >
+                <div className="h-12 w-12 rounded-lg bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
+                  <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-slate-900">View Counts</div>
+                  <div className="text-sm text-slate-500">View and share previous counts</div>
+                </div>
+              </button>
+
+
               <button
                 onClick={() => setView("import")}
                 className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-indigo-300 text-lg"
@@ -512,42 +550,6 @@ export function App() {
                 <div className="text-left">
                   <div className="font-semibold text-slate-900">Create Template</div>
                   <div className="text-sm text-slate-500">Manually create a new form template</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                   if (templates.length === 0) {
-                     alert("No templates available. Please import a CSV or create a template first.");
-                     return;
-                   }
-                   setView("count");
-                 }}
-                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-emerald-300 text-lg"
-              >
-                <div className="h-12 w-12 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
-                  <svg className="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <div className="font-semibold text-slate-900">Start Counting</div>
-                  <div className="text-sm text-slate-500">Count products from existing templates</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setView("view-counts")}
-                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-amber-300 text-lg"
-              >
-                <div className="h-12 w-12 rounded-lg bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-                  <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div className="text-left">
-                  <div className="font-semibold text-slate-900">View Counts</div>
-                  <div className="text-sm text-slate-500">View and share previous counts</div>
                 </div>
               </button>
             </div>
@@ -588,7 +590,7 @@ export function App() {
               <p className="text-slate-500 mb-4">
                 CSV format: Column 1 = Product ID, Column 2 = Product Name, Column 3 = Packaging Size, Column 4 = Sort Index (optional)
               </p>
-              
+
               <label className="block">
                 <input
                   type="file"
@@ -626,7 +628,7 @@ export function App() {
           <div className="space-y-6">
             <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">Create New Template</h2>
-              
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Template Name</label>
@@ -649,7 +651,7 @@ export function App() {
                       + Add Product
                     </button>
                   </div>
-                  
+
                   {newTemplateProducts.length === 0 ? (
                     <div className="rounded-lg bg-slate-50 p-4 text-center text-slate-500">
                       No products added yet
@@ -710,7 +712,7 @@ export function App() {
             {!currentForm ? (
               <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
                 <h2 className="text-xl font-semibold text-slate-900 mb-4">Select Template to Count</h2>
-                
+
                 {templates.length === 0 ? (
                   <div className="rounded-lg bg-amber-50 border border-amber-200 p-4 text-amber-800">
                     No templates available. Please import a CSV or create a template first.
@@ -729,7 +731,7 @@ export function App() {
                         </option>
                       ))}
                     </select>
-                    
+
                     <button
                       onClick={startCounting}
                       disabled={!selectedTemplateId}
@@ -739,6 +741,12 @@ export function App() {
                     </button>
                   </div>
                 )}
+                <button
+                  onClick={() => setView("start")}
+                  className="w-full rounded-xl bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                >
+                  Back to Start
+                </button>
               </div>
             ) : (
               <>
@@ -829,7 +837,7 @@ export function App() {
           <div className="space-y-6">
             <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
               <h2 className="text-xl font-semibold text-slate-900 mb-4">Previous Counts</h2>
-              
+
               {savedCounts.length === 0 ? (
                 <div className="rounded-lg bg-slate-50 p-6 text-center text-slate-500">
                   No counts saved yet
@@ -900,24 +908,24 @@ export function App() {
         )}
 
         {numberDialogOpen && (
-           <div className="fixed inset-0 z-50 flex items-center justify-center">
-             <div className="absolute inset-0 bg-black/40" onClick={() => setNumberDialogOpen(false)} />
-             <div className="relative w-[320px] rounded-lg bg-white p-4 shadow-lg">
-               <div className="mb-2 font-semibold">Enter amount</div>
-               <input
-                 autoFocus
-                 value={numberDialogValue}
-                 onChange={e => setNumberDialogValue(e.target.value.replace(/[^\d-]/g, ""))}
-                 placeholder="Enter positive integer"
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setNumberDialogOpen(false)} />
+            <div className="relative w-[320px] rounded-lg bg-white p-4 shadow-lg">
+              <div className="mb-2 font-semibold">Enter amount</div>
+              <input
+                autoFocus
+                value={numberDialogValue}
+                onChange={e => setNumberDialogValue(e.target.value.replace(/[^\d-]/g, ""))}
+                placeholder="Enter positive integer"
                 className="w-full rounded border px-3 py-2 mb-3 text-lg"
-               />
-               <div className="flex gap-2">
-                 <button onClick={() => setNumberDialogOpen(false)} className="flex-1 rounded bg-slate-100 py-2">Cancel</button>
-                 <button onClick={handleNumberDialogSubmit} className="flex-1 rounded bg-indigo-600 text-white py-2">Apply</button>
-               </div>
-             </div>
-           </div>
-         )}
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setNumberDialogOpen(false)} className="flex-1 rounded bg-slate-100 py-2">Cancel</button>
+                <button onClick={handleNumberDialogSubmit} className="flex-1 rounded bg-indigo-600 text-white py-2">Apply</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {resumeSessionDialogOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -932,7 +940,7 @@ export function App() {
             </div>
           </div>
         )}
-       </div>
-     </div>
-   );
- }
+      </div>
+    </div>
+  );
+}
