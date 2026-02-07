@@ -779,28 +779,28 @@ export function App() {
                           <button
                             onPointerDown={() => handleCountButtonDown(item.productId, "single", 1)}
                             onPointerUp={() => handleCountButtonUp(item.productId, "single", 1)}
-                            className="rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
+                            className="select-none rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
                           >
                             +1
                           </button>
                           <button
                             onPointerDown={() => handleCountButtonDown(item.productId, "single", -1)}
                             onPointerUp={() => handleCountButtonUp(item.productId, "single", -1)}
-                            className="rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
+                            className="select-none rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
                           >
                             -1
                           </button>
                           <button
                             onPointerDown={() => handleCountButtonDown(item.productId, "package", 1)}
                             onPointerUp={() => handleCountButtonUp(item.productId, "package", 1)}
-                            className="rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
+                            className="select-none rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
                           >
                             +{item.packagingSize}
                           </button>
                           <button
                             onPointerDown={() => handleCountButtonDown(item.productId, "package", -1)}
                             onPointerUp={() => handleCountButtonUp(item.productId, "package", -1)}
-                            className="rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
+                            className="select-none rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
                           >
                             -{item.packagingSize}
                           </button>
