@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Product {
   id: string;
@@ -11,7 +11,8 @@ interface CountItem {
   productId: string;
   productName: string;
   packagingSize: number;
-  count: number;
+  packageCount: number;
+  singleCount: number;
 }
 
 interface SavedCount {
@@ -42,6 +43,13 @@ export function App() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
+  // long-press dialog state
+  const longPressTimer = useRef<number | null>(null);
+  const longPressTriggered = useRef(false);
+  const [numberDialogOpen, setNumberDialogOpen] = useState(false);
+  const [numberDialogProduct, setNumberDialogProduct] = useState<{ productId: string; field: "single" | "package"; sign: 1 | -1 } | null>(null);
+  const [numberDialogValue, setNumberDialogValue] = useState<string>("");
+
   // Load data from localStorage on mount
   useEffect(() => {
     const savedTemplates = localStorage.getItem("productCounter_templates");
@@ -51,7 +59,34 @@ export function App() {
       setTemplates(JSON.parse(savedTemplates));
     }
     if (savedCountsData) {
-      setSavedCounts(JSON.parse(savedCountsData));
+      try {
+        const parsed = JSON.parse(savedCountsData) as SavedCount[];
+        // migrate old saved items that had a single "count" value into packageCount/singleCount
+        const migrated = parsed.map(sc => ({
+          ...sc,
+          items: sc.items.map(it => {
+            const anyIt = it as any;
+            if (anyIt.packageCount !== undefined && anyIt.singleCount !== undefined) {
+              return { ...anyIt };
+            }
+            // fallback: if legacy 'count' exists, split into packages + singles using packagingSize
+            const packagingSize = anyIt.packagingSize || 1;
+            const total = Number(anyIt.count ?? 0);
+            const packageCount = Math.floor(total / packagingSize);
+            const singleCount = total % packagingSize;
+            return {
+              productId: anyIt.productId,
+              productName: anyIt.productName,
+              packagingSize,
+              packageCount,
+              singleCount,
+            };
+          }),
+        }));
+        setSavedCounts(migrated);
+      } catch {
+        setSavedCounts([]);
+      }
     }
   }, []);
 
@@ -215,37 +250,83 @@ export function App() {
         productId: p.id,
         productName: p.name,
         packagingSize: p.packagingSize,
-        count: 0,
+        packageCount: 0,
+        singleCount: 0,
       }))
     );
     setView("count");
   };
 
-  // Update count for a product
-  const updateCount = (productId: string, delta: number) => {
+  // Update single item count for a product
+  const updateSingleCount = (productId: string, delta: number) => {
     setCurrentCounts(prev =>
       prev.map(item => {
         if (item.productId === productId) {
-          const newCount = Math.max(0, item.count + delta);
-          return { ...item, count: newCount };
+          const newSingle = Math.max(0, item.singleCount + delta);
+          return { ...item, singleCount: newSingle };
         }
         return item;
       })
     );
   };
 
-  // Update count by packaging size
-  const updateCountByPackaging = (productId: string, multiplier: number) => {
+  // Update package count for a product
+  const updatePackageCount = (productId: string, delta: number) => {
     setCurrentCounts(prev =>
       prev.map(item => {
         if (item.productId === productId) {
-          const newCount = Math.max(0, item.count + (item.packagingSize * multiplier));
-          return { ...item, count: newCount };
+          const newPackages = Math.max(0, item.packageCount + delta);
+          return { ...item, packageCount: newPackages };
         }
         return item;
       })
     );
   };
+
+  // long-press helpers
+  const openNumberDialogFor = (productId: string, field: "single" | "package", sign: 1 | -1) => {
+    setNumberDialogProduct({ productId, field, sign });
+    setNumberDialogValue("");
+    setNumberDialogOpen(true);
+  };
+
+  const handleNumberDialogSubmit = () => {
+    if (!numberDialogProduct) return;
+    const n = parseInt(numberDialogValue || "0", 10);
+    if (isNaN(n) || n === 0) {
+      setNumberDialogOpen(false);
+      return;
+    }
+    const delta = numberDialogProduct.sign * n;
+    if (numberDialogProduct.field === "single") {
+      updateSingleCount(numberDialogProduct.productId, delta);
+    } else {
+      updatePackageCount(numberDialogProduct.productId, delta);
+    }
+    setNumberDialogOpen(false);
+  };
+
+  const startLongPress = (productId: string, field: "single" | "package", sign: 1 | -1) => {
+    longPressTriggered.current = false;
+    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      openNumberDialogFor(productId, field, sign);
+    }, 600);
+  };
+
+  const endLongPress = (productId: string, field: "single" | "package", sign: 1 | -1, shortPressAction: () => void) => {
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (!longPressTriggered.current) {
+      shortPressAction();
+    }
+    longPressTriggered.current = false;
+  };
+
+  const getTotal = (item: CountItem) => item.packageCount * item.packagingSize + item.singleCount;
 
   // Submit count
   const submitCount = () => {
@@ -277,9 +358,10 @@ export function App() {
     
     const filename = `${count.formName}_${dateStr}.csv`;
     
-    let csv = "Product ID,Product Name,Packaging Size,Count\n";
+    let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
     count.items.forEach(item => {
-      csv += `${item.productId},${item.productName},${item.packagingSize},${item.count}\n`;
+      const total = getTotal(item);
+      csv += `${item.productId},${item.productName},${item.packagingSize},${item.packageCount},${item.singleCount},${total}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -302,9 +384,10 @@ export function App() {
     
     const filename = `${count.formName}_${dateStr}.csv`;
     
-    let csv = "Product ID,Product Name,Packaging Size,Count\n";
+    let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
     count.items.forEach(item => {
-      csv += `${item.productId},${item.productName},${item.packagingSize},${item.count}\n`;
+      const total = getTotal(item);
+      csv += `${item.productId},${item.productName},${item.packagingSize},${item.packageCount},${item.singleCount},${total}\n`;
     });
 
     const blob = new Blob([csv], { type: "text/csv" });
@@ -643,7 +726,7 @@ export function App() {
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-semibold text-slate-900">{currentForm.name}</h2>
                     <span className="text-sm text-slate-500">
-                      {currentCounts.filter(c => c.count > 0).length} / {currentCounts.length} counted
+                      {currentCounts.filter(c => c.packageCount > 0 || c.singleCount > 0).length} / {currentCounts.length} counted
                     </span>
                   </div>
 
@@ -658,31 +741,49 @@ export function App() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-3xl font-bold text-indigo-600">{item.count}</div>
+                            <div className="text-3xl font-bold text-indigo-600">
+                              {item.packageCount} 𐄹 + {item.singleCount}  = {getTotal(item)}
+                            </div>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-4 gap-2">
                           <button
-                            onClick={() => updateCount(item.productId, 1)}
+                            onMouseDown={() => startLongPress(item.productId, "single", 1)}
+                            onTouchStart={() => startLongPress(item.productId, "single", 1)}
+                            onMouseUp={() => endLongPress(item.productId, "single", 1, () => updateSingleCount(item.productId, 1))}
+                            onMouseLeave={() => endLongPress(item.productId, "single", 1, () => {})}
+                            onTouchEnd={() => endLongPress(item.productId, "single", 1, () => updateSingleCount(item.productId, 1))}
                             className="rounded-lg bg-green-100 py-2 text-sm font-medium text-green-700 hover:bg-green-200 transition-colors"
                           >
                             +1
                           </button>
                           <button
-                            onClick={() => updateCount(item.productId, -1)}
+                            onMouseDown={() => startLongPress(item.productId, "single", -1)}
+                            onTouchStart={() => startLongPress(item.productId, "single", -1)}
+                            onMouseUp={() => endLongPress(item.productId, "single", -1, () => updateSingleCount(item.productId, -1))}
+                            onMouseLeave={() => endLongPress(item.productId, "single", -1, () => {})}
+                            onTouchEnd={() => endLongPress(item.productId, "single", -1, () => updateSingleCount(item.productId, -1))}
                             className="rounded-lg bg-red-100 py-2 text-sm font-medium text-red-700 hover:bg-red-200 transition-colors"
                           >
                             -1
                           </button>
                           <button
-                            onClick={() => updateCountByPackaging(item.productId, 1)}
+                            onMouseDown={() => startLongPress(item.productId, "package", 1)}
+                            onTouchStart={() => startLongPress(item.productId, "package", 1)}
+                            onMouseUp={() => endLongPress(item.productId, "package", 1, () => updatePackageCount(item.productId, 1))}
+                            onMouseLeave={() => endLongPress(item.productId, "package", 1, () => {})}
+                            onTouchEnd={() => endLongPress(item.productId, "package", 1, () => updatePackageCount(item.productId, 1))}
                             className="rounded-lg bg-emerald-100 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200 transition-colors"
                           >
                             +{item.packagingSize}
                           </button>
                           <button
-                            onClick={() => updateCountByPackaging(item.productId, -1)}
+                            onMouseDown={() => startLongPress(item.productId, "package", -1)}
+                            onTouchStart={() => startLongPress(item.productId, "package", -1)}
+                            onMouseUp={() => endLongPress(item.productId, "package", -1, () => updatePackageCount(item.productId, -1))}
+                            onMouseLeave={() => endLongPress(item.productId, "package", -1, () => {})}
+                            onTouchEnd={() => endLongPress(item.productId, "package", -1, () => updatePackageCount(item.productId, -1))}
                             className="rounded-lg bg-orange-100 py-2 text-sm font-medium text-orange-700 hover:bg-orange-200 transition-colors"
                           >
                             -{item.packagingSize}
@@ -761,15 +862,17 @@ export function App() {
                       <div className="rounded-lg bg-slate-50 p-3">
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           {count.items
-                            .filter(item => item.count > 0)
+                            .filter(item => item.packageCount > 0 || item.singleCount > 0)
                             .map((item, idx) => (
                               <div key={idx} className="flex justify-between">
                                 <span className="text-slate-600">{item.productName}</span>
-                                <span className="font-medium text-slate-900">{item.count}</span>
+                                <span className="font-medium text-slate-900">
+                                  {item.packageCount} packages + {item.singleCount} single = {getTotal(item)}
+                                </span>
                               </div>
                             ))}
                         </div>
-                        {count.items.filter(item => item.count > 0).length === 0 && (
+                        {count.items.filter(item => item.packageCount > 0 || item.singleCount > 0).length === 0 && (
                           <div className="text-sm text-slate-500 text-center">No items counted</div>
                         )}
                       </div>
@@ -785,6 +888,26 @@ export function App() {
             >
               Back to Start
             </button>
+          </div>
+        )}
+
+        {numberDialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setNumberDialogOpen(false)} />
+            <div className="relative w-[320px] rounded-lg bg-white p-4 shadow-lg">
+              <div className="mb-2 font-semibold">Enter amount</div>
+              <input
+                autoFocus
+                value={numberDialogValue}
+                onChange={e => setNumberDialogValue(e.target.value.replace(/[^\d-]/g, ""))}
+                placeholder="Enter positive integer"
+                className="w-full rounded border px-3 py-2 mb-3"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setNumberDialogOpen(false)} className="flex-1 rounded bg-slate-100 py-2">Cancel</button>
+                <button onClick={handleNumberDialogSubmit} className="flex-1 rounded bg-indigo-600 text-white py-2">Apply</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
