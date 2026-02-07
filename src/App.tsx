@@ -43,9 +43,12 @@ export function App() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [successMessage, setSuccessMessage] = useState<string>("");
 
+  // persistent counting session state
+  const [resumeSessionDialogOpen, setResumeSessionDialogOpen] = useState(false);
+  const sessionRecovered = useRef(false);
+
   // long-press dialog state
-  const longPressTimer = useRef<number | null>(null);
-  const longPressTriggered = useRef(false);
+  const longPressStart = useRef<number | null>(null);
   const [numberDialogOpen, setNumberDialogOpen] = useState(false);
   const [numberDialogProduct, setNumberDialogProduct] = useState<{ productId: string; field: "single" | "package"; sign: 1 | -1 } | null>(null);
   const [numberDialogValue, setNumberDialogValue] = useState<string>("");
@@ -54,6 +57,7 @@ export function App() {
   useEffect(() => {
     const savedTemplates = localStorage.getItem("productCounter_templates");
     const savedCountsData = localStorage.getItem("productCounter_counts");
+    const savedSession = localStorage.getItem("productCounter_session");
     
     if (savedTemplates) {
       setTemplates(JSON.parse(savedTemplates));
@@ -88,6 +92,19 @@ export function App() {
         setSavedCounts([]);
       }
     }
+    
+    // check for active session to resume
+    if (savedSession && !sessionRecovered.current) {
+      try {
+        const session = JSON.parse(savedSession) as { form: FormTemplate; counts: CountItem[] };
+        setCurrentForm(session.form);
+        setCurrentCounts(session.counts);
+        setResumeSessionDialogOpen(true);
+        sessionRecovered.current = true;
+      } catch {
+        localStorage.removeItem("productCounter_session");
+      }
+    }
   }, []);
 
   // Save data to localStorage
@@ -98,6 +115,16 @@ export function App() {
   useEffect(() => {
     localStorage.setItem("productCounter_counts", JSON.stringify(savedCounts));
   }, [savedCounts]);
+
+  // Save active session to localStorage
+  useEffect(() => {
+    if (currentForm && currentCounts.length > 0) {
+      const session = { form: currentForm, counts: currentCounts };
+      localStorage.setItem("productCounter_session", JSON.stringify(session));
+    } else {
+      localStorage.removeItem("productCounter_session");
+    }
+  }, [currentForm, currentCounts]);
 
   // Parse CSV file
   const parseCSV = (text: string): Product[] => {
@@ -306,24 +333,26 @@ export function App() {
     setNumberDialogOpen(false);
   };
 
-  const startLongPress = (productId: string, field: "single" | "package", sign: 1 | -1) => {
-    longPressTriggered.current = false;
-    if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
-    longPressTimer.current = window.setTimeout(() => {
-      longPressTriggered.current = true;
-      openNumberDialogFor(productId, field, sign);
-    }, 600);
+  const handleCountButtonDown = (productId: string, field: "single" | "package", sign: 1 | -1) => {
+    longPressStart.current = Date.now();
   };
 
-  const endLongPress = (productId: string, field: "single" | "package", sign: 1 | -1, shortPressAction: () => void) => {
-    if (longPressTimer.current) {
-      window.clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+  const handleCountButtonUp = (productId: string, field: "single" | "package", sign: 1 | -1) => {
+    if (!longPressStart.current) return;
+    const duration = Date.now() - longPressStart.current;
+    longPressStart.current = null;
+
+    if (duration >= 600) {
+      // Long press: open dialog
+      openNumberDialogFor(productId, field, sign);
+    } else {
+      // Short press: execute action
+      if (field === "single") {
+        updateSingleCount(productId, sign);
+      } else {
+        updatePackageCount(productId, sign);
+      }
     }
-    if (!longPressTriggered.current) {
-      shortPressAction();
-    }
-    longPressTriggered.current = false;
   };
 
   const getTotal = (item: CountItem) => item.packageCount * item.packagingSize + item.singleCount;
@@ -430,30 +459,21 @@ export function App() {
     return date.toLocaleString();
   };
 
+  const handleResumeSession = (resume: boolean) => {
+    setResumeSessionDialogOpen(false);
+    if (resume) {
+      setView("count");
+    } else {
+      setCurrentForm(null);
+      setCurrentCounts([]);
+      setView("start");
+      localStorage.removeItem("productCounter_session");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <header className="mb-8 text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-200 mb-4">
-            <svg
-              className="h-7 w-7 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-              <line x1="12" y1="22.08" x2="12" y2="12" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900">Product Counter</h1>
-          <p className="text-slate-500 mt-1">Import CSV, count products, and export results</p>
-        </header>
-
         {/* Success Message */}
         {successMessage && (
           <div className="mb-6 rounded-lg bg-green-50 border border-green-200 p-4 text-green-800 text-center">
@@ -467,7 +487,7 @@ export function App() {
             <div className="grid gap-4 md:grid-cols-2">
               <button
                 onClick={() => setView("import")}
-                className="group flex items-center justify-start gap-4 rounded-xl bg-white p-6 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-indigo-300"
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-indigo-300 text-lg"
               >
                 <div className="h-12 w-12 rounded-lg bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
                   <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -482,7 +502,7 @@ export function App() {
 
               <button
                 onClick={() => setView("create-template")}
-                className="group flex items-center justify-start gap-4 rounded-xl bg-white p-6 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-purple-300"
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-purple-300 text-lg"
               >
                 <div className="h-12 w-12 rounded-lg bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
                   <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -497,13 +517,13 @@ export function App() {
 
               <button
                 onClick={() => {
-                  if (templates.length === 0) {
-                    alert("No templates available. Please import a CSV or create a template first.");
-                    return;
-                  }
-                  setView("count");
-                }}
-                className="group flex items-center justify-start gap-4 rounded-xl bg-white p-6 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-emerald-300"
+                   if (templates.length === 0) {
+                     alert("No templates available. Please import a CSV or create a template first.");
+                     return;
+                   }
+                   setView("count");
+                 }}
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-emerald-300 text-lg"
               >
                 <div className="h-12 w-12 rounded-lg bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-colors">
                   <svg className="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -518,7 +538,7 @@ export function App() {
 
               <button
                 onClick={() => setView("view-counts")}
-                className="group flex items-center justify-start gap-4 rounded-xl bg-white p-6 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-amber-300"
+                className="group flex items-center justify-start gap-6 rounded-xl bg-white py-6 px-5 shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-amber-300 text-lg"
               >
                 <div className="h-12 w-12 rounded-lg bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
                   <svg className="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -594,7 +614,7 @@ export function App() {
 
             <button
               onClick={() => setView("start")}
-              className="w-full rounded-lg bg-slate-100 py-3 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+              className="w-full rounded-xl bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
             >
               Back to Start
             </button>
@@ -670,13 +690,13 @@ export function App() {
                   setNewTemplateProducts([]);
                   setView("start");
                 }}
-                className="flex-1 rounded-lg bg-slate-100 py-3 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                className="flex-1 rounded-lg bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={saveTemplate}
-                className="flex-1 rounded-lg bg-indigo-600 py-3 font-medium text-white hover:bg-indigo-700 transition-colors"
+                className="flex-1 rounded-xl bg-indigo-600 py-4 font-medium text-white hover:bg-indigo-700 transition-colors"
               >
                 Save Template
               </button>
@@ -741,50 +761,38 @@ export function App() {
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-3xl font-bold text-indigo-600">
-                              {item.packageCount} 𐄹 + {item.singleCount}  = {getTotal(item)}
+                            <div className="text-2xl font-bold text-indigo-600">
+                              {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-4 gap-2 text-3xl">
                           <button
-                            onMouseDown={() => startLongPress(item.productId, "single", 1)}
-                            onTouchStart={() => startLongPress(item.productId, "single", 1)}
-                            onMouseUp={() => endLongPress(item.productId, "single", 1, () => updateSingleCount(item.productId, 1))}
-                            onMouseLeave={() => endLongPress(item.productId, "single", 1, () => {})}
-                            onTouchEnd={() => endLongPress(item.productId, "single", 1, () => updateSingleCount(item.productId, 1))}
-                            className="rounded-lg bg-green-100 py-2 text-sm font-medium text-green-700 hover:bg-green-200 transition-colors"
+                            onPointerDown={() => handleCountButtonDown(item.productId, "single", 1)}
+                            onPointerUp={() => handleCountButtonUp(item.productId, "single", 1)}
+                            className="rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
                           >
                             +1
                           </button>
                           <button
-                            onMouseDown={() => startLongPress(item.productId, "single", -1)}
-                            onTouchStart={() => startLongPress(item.productId, "single", -1)}
-                            onMouseUp={() => endLongPress(item.productId, "single", -1, () => updateSingleCount(item.productId, -1))}
-                            onMouseLeave={() => endLongPress(item.productId, "single", -1, () => {})}
-                            onTouchEnd={() => endLongPress(item.productId, "single", -1, () => updateSingleCount(item.productId, -1))}
-                            className="rounded-lg bg-red-100 py-2 text-sm font-medium text-red-700 hover:bg-red-200 transition-colors"
+                            onPointerDown={() => handleCountButtonDown(item.productId, "single", -1)}
+                            onPointerUp={() => handleCountButtonUp(item.productId, "single", -1)}
+                            className="rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
                           >
                             -1
                           </button>
                           <button
-                            onMouseDown={() => startLongPress(item.productId, "package", 1)}
-                            onTouchStart={() => startLongPress(item.productId, "package", 1)}
-                            onMouseUp={() => endLongPress(item.productId, "package", 1, () => updatePackageCount(item.productId, 1))}
-                            onMouseLeave={() => endLongPress(item.productId, "package", 1, () => {})}
-                            onTouchEnd={() => endLongPress(item.productId, "package", 1, () => updatePackageCount(item.productId, 1))}
-                            className="rounded-lg bg-emerald-100 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-200 transition-colors"
+                            onPointerDown={() => handleCountButtonDown(item.productId, "package", 1)}
+                            onPointerUp={() => handleCountButtonUp(item.productId, "package", 1)}
+                            className="rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
                           >
                             +{item.packagingSize}
                           </button>
                           <button
-                            onMouseDown={() => startLongPress(item.productId, "package", -1)}
-                            onTouchStart={() => startLongPress(item.productId, "package", -1)}
-                            onMouseUp={() => endLongPress(item.productId, "package", -1, () => updatePackageCount(item.productId, -1))}
-                            onMouseLeave={() => endLongPress(item.productId, "package", -1, () => {})}
-                            onTouchEnd={() => endLongPress(item.productId, "package", -1, () => updatePackageCount(item.productId, -1))}
-                            className="rounded-lg bg-orange-100 py-2 text-sm font-medium text-orange-700 hover:bg-orange-200 transition-colors"
+                            onPointerDown={() => handleCountButtonDown(item.productId, "package", -1)}
+                            onPointerUp={() => handleCountButtonUp(item.productId, "package", -1)}
+                            className="rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
                           >
                             -{item.packagingSize}
                           </button>
@@ -800,13 +808,13 @@ export function App() {
                       setCurrentForm(null);
                       setCurrentCounts([]);
                     }}
-                    className="flex-1 rounded-lg bg-slate-100 py-3 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+                    className="flex-1 rounded-lg bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={submitCount}
-                    className="flex-1 rounded-lg bg-indigo-600 py-3 font-medium text-white hover:bg-indigo-700 transition-colors"
+                    className="flex-1 rounded-xl bg-indigo-600 py-4 font-medium text-white hover:bg-indigo-700 transition-colors"
                   >
                     Submit Count
                   </button>
@@ -884,7 +892,7 @@ export function App() {
 
             <button
               onClick={() => setView("start")}
-              className="w-full rounded-lg bg-slate-100 py-3 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
+              className="w-full rounded-xl bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
             >
               Back to Start
             </button>
@@ -892,25 +900,39 @@ export function App() {
         )}
 
         {numberDialogOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center">
+             <div className="absolute inset-0 bg-black/40" onClick={() => setNumberDialogOpen(false)} />
+             <div className="relative w-[320px] rounded-lg bg-white p-4 shadow-lg">
+               <div className="mb-2 font-semibold">Enter amount</div>
+               <input
+                 autoFocus
+                 value={numberDialogValue}
+                 onChange={e => setNumberDialogValue(e.target.value.replace(/[^\d-]/g, ""))}
+                 placeholder="Enter positive integer"
+                className="w-full rounded border px-3 py-2 mb-3 text-lg"
+               />
+               <div className="flex gap-2">
+                 <button onClick={() => setNumberDialogOpen(false)} className="flex-1 rounded bg-slate-100 py-2">Cancel</button>
+                 <button onClick={handleNumberDialogSubmit} className="flex-1 rounded bg-indigo-600 text-white py-2">Apply</button>
+               </div>
+             </div>
+           </div>
+         )}
+
+        {resumeSessionDialogOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setNumberDialogOpen(false)} />
-            <div className="relative w-[320px] rounded-lg bg-white p-4 shadow-lg">
-              <div className="mb-2 font-semibold">Enter amount</div>
-              <input
-                autoFocus
-                value={numberDialogValue}
-                onChange={e => setNumberDialogValue(e.target.value.replace(/[^\d-]/g, ""))}
-                placeholder="Enter positive integer"
-                className="w-full rounded border px-3 py-2 mb-3"
-              />
-              <div className="flex gap-2">
-                <button onClick={() => setNumberDialogOpen(false)} className="flex-1 rounded bg-slate-100 py-2">Cancel</button>
-                <button onClick={handleNumberDialogSubmit} className="flex-1 rounded bg-indigo-600 text-white py-2">Apply</button>
+            <div className="absolute inset-0 bg-black/40" onClick={() => handleResumeSession(false)} />
+            <div className="relative w-[340px] rounded-lg bg-white p-6 shadow-lg">
+              <div className="mb-4 font-semibold text-lg">Resume Counting?</div>
+              <p className="text-slate-600 mb-6">You have an active counting session. Do you want to continue?</p>
+              <div className="flex gap-3">
+                <button onClick={() => handleResumeSession(false)} className="flex-1 rounded-lg bg-slate-100 py-3 font-medium text-slate-700 hover:bg-slate-200">Discard</button>
+                <button onClick={() => handleResumeSession(true)} className="flex-1 rounded-lg bg-indigo-600 py-3 font-medium text-white hover:bg-indigo-700">Resume</button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
+       </div>
+     </div>
+   );
+ }
