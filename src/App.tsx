@@ -720,9 +720,9 @@ export function App() {
 
         {/* Count Screen */}
         {view === "count" && (
-          <div className="space-y-6">
+          <div className="space-y-6 flex flex-col h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)]">
             {!currentForm ? (
-              <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
+              <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200 flex flex-col flex-1 min-h-0">
                 <h2 className="text-xl font-semibold text-slate-900 mb-4">Select Template to Count</h2>
 
                 {templates.length === 0 ? (
@@ -761,8 +761,8 @@ export function App() {
                 </button>
               </div>
             ) : (
-              <>
-                <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200">
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200 flex flex-col flex-1 min-h-0">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-semibold text-slate-900">{currentForm.name}</h2>
                     <span className="text-sm text-slate-500">
@@ -770,7 +770,7 @@ export function App() {
                     </span>
                   </div>
 
-                  <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  <div className="space-y-3 overflow-y-auto flex-1">
                     {currentCounts.map(item => (
                       <div key={item.productId} className="rounded-lg border border-slate-200 p-4">
                         <div className="flex items-start justify-between mb-3">
@@ -822,7 +822,7 @@ export function App() {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => {
                       setCurrentForm(null);
@@ -839,7 +839,7 @@ export function App() {
                     Submit Count
                   </button>
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}
