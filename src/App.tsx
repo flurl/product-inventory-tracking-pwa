@@ -271,9 +271,21 @@ export function App() {
     const template = templates.find(t => t.id === selectedTemplateId);
     if (!template) return;
 
+    // Sort products: by sortIndex descending (0 for missing), then alphabetically by name
+    const sortedProducts = [...template.products].sort((a, b) => {
+      const aIndex = a.sortIndex ?? 0;
+      const bIndex = b.sortIndex ?? 0;
+
+      if (aIndex !== bIndex) {
+        return bIndex - aIndex; // Descending by sort index
+      }
+
+      return a.name.localeCompare(b.name); // Alphabetically by name
+    });
+
     setCurrentForm(template);
     setCurrentCounts(
-      template.products.map(p => ({
+      sortedProducts.map(p => ({
         productId: p.id,
         productName: p.name,
         packagingSize: p.packagingSize,
