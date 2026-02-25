@@ -53,6 +53,11 @@ export function App() {
   const [numberDialogProduct, setNumberDialogProduct] = useState<{ productId: string; field: "single" | "package"; sign: 1 | -1 } | null>(null);
   const [numberDialogValue, setNumberDialogValue] = useState<string>("");
 
+  // sidebar navigation state
+  const [activeLetter, setActiveLetter] = useState<string>("");
+  const productListRef = useRef<HTMLDivElement>(null);
+  const productRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
   // Load data from localStorage on mount
   useEffect(() => {
     const savedTemplates = localStorage.getItem("productCounter_templates");
@@ -125,6 +130,42 @@ export function App() {
       localStorage.removeItem("productCounter_session");
     }
   }, [currentForm, currentCounts]);
+
+  // Handle scroll to detect active letter
+  const handleProductListScroll = () => {
+    if (!productListRef.current) return;
+
+    const scrollTop = productListRef.current.scrollTop;
+    let currentLetter = "";
+
+    for (const [letter, element] of productRefs.current) {
+      if (element.offsetTop <= scrollTop + 100) {
+        currentLetter = letter;
+      } else {
+        break;
+      }
+    }
+
+    setActiveLetter(currentLetter);
+  };
+
+  // Scroll to products starting with letter
+  const scrollToLetter = (letter: string) => {
+    const element = productRefs.current.get(letter);
+    if (element && productListRef.current) {
+      element.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveLetter(letter);
+    }
+  };
+
+  // Get first letter of product name
+  const getFirstLetter = (name: string) => name.charAt(0).toUpperCase();
+
+  // Get available letters from current products
+  const getAvailableLetters = () => {
+    const letters = new Set(currentCounts.map(item => getFirstLetter(item.productName)));
+    return Array.from(letters).sort();
+  };
 
   // Parse CSV file
   const parseCSV = (text: string): Product[] => {
@@ -293,7 +334,8 @@ export function App() {
         singleCount: 0,
       }))
     );
-    setView("count");
+    setActiveLetter("");
+    productRefs.current.clear();
   };
 
   // Update single item count for a product
@@ -761,7 +803,7 @@ export function App() {
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex gap-4 flex-col flex-1 min-h-0 relative">
                 <div className="rounded-xl bg-white p-6 shadow-sm border border-slate-200 flex flex-col flex-1 min-h-0">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xl font-semibold text-slate-900">{currentForm.name}</h2>
@@ -770,59 +812,111 @@ export function App() {
                     </span>
                   </div>
 
-                  <div className="space-y-3 overflow-y-auto flex-1">
-                    {currentCounts.map(item => (
-                      <div key={item.productId} className="rounded-lg border border-slate-200 p-4">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <div className="font-medium text-slate-900">{item.productName}</div>
-                            <div className="text-sm text-slate-500">
-                              ID: {item.productId} • Size: {item.packagingSize}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-indigo-600">
-                              {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
-                            </div>
-                          </div>
-                        </div>
+                  <div className="flex gap-4 flex-1 min-h-0">
+                    {/* Product list */}
+                    <div
+                      ref={productListRef}
+                      onScroll={handleProductListScroll}
+                      className="space-y-3 overflow-y-auto flex-1"
+                    >
+                      {currentCounts.map((item, idx) => {
+                        const letter = getFirstLetter(item.productName);
+                        const prevLetter = idx > 0 ? getFirstLetter(currentCounts[idx - 1].productName) : "";
+                        const showLetterHeader = letter !== prevLetter;
 
-                        <div className="grid grid-cols-4 gap-2 text-3xl">
-                          <button
-                            onPointerDown={() => handleCountButtonDown(item.productId, "single", 1)}
-                            onPointerUp={() => handleCountButtonUp(item.productId, "single", 1)}
-                            className="select-none rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
+                        return (
+                          <div
+                            key={item.productId}
+                            ref={el => {
+                              if (el && showLetterHeader) {
+                                productRefs.current.set(letter, el);
+                              }
+                            }}
                           >
-                            +1
-                          </button>
+                            {showLetterHeader && (
+                              <div className="sticky top-0 bg-white bg-opacity-90 py-2 px-3 font-semibold text-slate-700 text-sm border-b border-slate-200 z-10">
+                                {letter}
+                              </div>
+                            )}
+                            <div className="rounded-lg border border-slate-200 p-4">
+                              <div className="flex items-start justify-between mb-3">
+                                <div>
+                                  <div className="font-medium text-slate-900">{item.productName}</div>
+                                  <div className="text-sm text-slate-500">
+                                    ID: {item.productId} • Size: {item.packagingSize}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-2xl font-bold text-indigo-600">
+                                    {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-4 gap-2 text-3xl">
+                                <button
+                                  onPointerDown={() => handleCountButtonDown(item.productId, "single", 1)}
+                                  onPointerUp={() => handleCountButtonUp(item.productId, "single", 1)}
+                                  className="select-none rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
+                                >
+                                  +1
+                                </button>
+                                <button
+                                  onPointerDown={() => handleCountButtonDown(item.productId, "single", -1)}
+                                  onPointerUp={() => handleCountButtonUp(item.productId, "single", -1)}
+                                  className="select-none rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
+                                >
+                                  -1
+                                </button>
+                                <button
+                                  onPointerDown={() => handleCountButtonDown(item.productId, "package", 1)}
+                                  onPointerUp={() => handleCountButtonUp(item.productId, "package", 1)}
+                                  className="select-none rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
+                                >
+                                  +{item.packagingSize}
+                                </button>
+                                <button
+                                  onPointerDown={() => handleCountButtonDown(item.productId, "package", -1)}
+                                  onPointerUp={() => handleCountButtonUp(item.productId, "package", -1)}
+                                  className="select-none rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
+                                >
+                                  -{item.packagingSize}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Sidebar with A-Z navigation */}
+                    <div className="flex flex-col gap-1 py-2 px-1 bg-slate-50 rounded-lg overflow-y-auto" style={{ maxHeight: "calc(100vh - 20rem)" }}>
+                      {Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZ").map(letter => {
+                        const available = getAvailableLetters().includes(letter);
+                        return (
                           <button
-                            onPointerDown={() => handleCountButtonDown(item.productId, "single", -1)}
-                            onPointerUp={() => handleCountButtonUp(item.productId, "single", -1)}
-                            className="select-none rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
+                            key={letter}
+                            onClick={() => scrollToLetter(letter)}
+                            disabled={!available}
+                            className={`
+                              w-8 h-8 rounded text-sm font-medium transition-colors flex-shrink-0
+                              ${activeLetter === letter
+                                ? "bg-indigo-600 text-white"
+                                : available
+                                  ? "bg-white text-slate-900 hover:bg-indigo-100"
+                                  : "text-slate-300 cursor-not-allowed bg-slate-100"
+                              }
+                            `}
                           >
-                            -1
+                            {letter}
                           </button>
-                          <button
-                            onPointerDown={() => handleCountButtonDown(item.productId, "package", 1)}
-                            onPointerUp={() => handleCountButtonUp(item.productId, "package", 1)}
-                            className="select-none rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
-                          >
-                            +{item.packagingSize}
-                          </button>
-                          <button
-                            onPointerDown={() => handleCountButtonDown(item.productId, "package", -1)}
-                            onPointerUp={() => handleCountButtonUp(item.productId, "package", -1)}
-                            className="select-none rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
-                          >
-                            -{item.packagingSize}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3">
                   <button
                     onClick={() => {
                       setCurrentForm(null);
