@@ -536,7 +536,7 @@ export function App() {
     }
   };
 
-  const APP_VERSION = "1.2.0";
+  const APP_VERSION = "1.2.1";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-4 md:p-8">
