@@ -40,3 +40,7 @@ The app imports product templates via CSV with columns: `Product ID, Name, Packa
 ## Path Alias
 
 `@/` maps to `src/` (configured in both `vite.config.ts` and `tsconfig.json`).
+
+## Versioning
+
+The app version is defined as `APP_VERSION` near the top of the `return` block in `src/App.tsx`. **After every change, increment this version** using semantic versioning (patch for fixes/small changes, minor for new features).

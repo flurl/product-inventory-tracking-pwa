@@ -532,8 +532,11 @@ export function App() {
     }
   };
 
+  const APP_VERSION = "1.0.1";
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-4 md:p-8">
+      <div className="fixed bottom-2 left-3 text-xs text-slate-400 select-none z-10">v{APP_VERSION}</div>
       <div className="max-w-4xl mx-auto">
         {/* Success Message */}
         {successMessage && (
