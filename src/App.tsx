@@ -7,12 +7,18 @@ interface Product {
   sortIndex?: number;
 }
 
+interface SubCount {
+  packageCount: number;
+  singleCount: number;
+}
+
 interface CountItem {
   productId: string;
   productName: string;
   packagingSize: number;
   packageCount: number;
   singleCount: number;
+  subCounts?: SubCount[];
 }
 
 interface SavedCount {
@@ -52,6 +58,9 @@ export function App() {
   const [numberDialogOpen, setNumberDialogOpen] = useState(false);
   const [numberDialogProduct, setNumberDialogProduct] = useState<{ productId: string; field: "single" | "package"; sign: 1 | -1 } | null>(null);
   const [numberDialogValue, setNumberDialogValue] = useState<string>("");
+
+  // active product for sub-count tracking
+  const [activeProductId, setActiveProductId] = useState<string | null>(null);
 
   // sidebar navigation state
   const [activeLetter, setActiveLetter] = useState<string>("");
@@ -332,34 +341,39 @@ export function App() {
         packagingSize: p.packagingSize,
         packageCount: 0,
         singleCount: 0,
+        subCounts: [],
       }))
     );
+    setActiveProductId(null);
     setActiveLetter("");
     productRefs.current.clear();
   };
 
-  // Update single item count for a product
-  const updateSingleCount = (productId: string, delta: number) => {
-    setCurrentCounts(prev =>
-      prev.map(item => {
-        if (item.productId === productId) {
-          const newSingle = Math.max(0, item.singleCount + delta);
-          return { ...item, singleCount: newSingle };
-        }
-        return item;
-      })
-    );
-  };
+  // Apply a count delta, splitting into a new sub-count when switching products
+  const applyCountDelta = (productId: string, field: "single" | "package", delta: number) => {
+    const isNewActive = activeProductId !== productId;
+    if (isNewActive) setActiveProductId(productId);
 
-  // Update package count for a product
-  const updatePackageCount = (productId: string, delta: number) => {
     setCurrentCounts(prev =>
       prev.map(item => {
-        if (item.productId === productId) {
-          const newPackages = Math.max(0, item.packageCount + delta);
-          return { ...item, packageCount: newPackages };
+        if (item.productId !== productId) return item;
+
+        let subCounts = [...(item.subCounts ?? [])];
+        if (isNewActive || subCounts.length === 0) {
+          subCounts = [...subCounts, { packageCount: 0, singleCount: 0 }];
         }
-        return item;
+
+        const lastIdx = subCounts.length - 1;
+        const last = subCounts[lastIdx];
+        if (field === "single") {
+          subCounts[lastIdx] = { ...last, singleCount: Math.max(0, last.singleCount + delta) };
+        } else {
+          subCounts[lastIdx] = { ...last, packageCount: Math.max(0, last.packageCount + delta) };
+        }
+
+        const packageCount = subCounts.reduce((s, sc) => s + sc.packageCount, 0);
+        const singleCount = subCounts.reduce((s, sc) => s + sc.singleCount, 0);
+        return { ...item, subCounts, packageCount, singleCount };
       })
     );
   };
@@ -379,11 +393,7 @@ export function App() {
       return;
     }
     const delta = numberDialogProduct.sign * n;
-    if (numberDialogProduct.field === "single") {
-      updateSingleCount(numberDialogProduct.productId, delta);
-    } else {
-      updatePackageCount(numberDialogProduct.productId, delta);
-    }
+    applyCountDelta(numberDialogProduct.productId, numberDialogProduct.field, delta);
     setNumberDialogOpen(false);
   };
 
@@ -401,11 +411,7 @@ export function App() {
       openNumberDialogFor(productId, field, sign);
     } else {
       // Short press: execute action
-      if (field === "single") {
-        updateSingleCount(productId, sign);
-      } else {
-        updatePackageCount(productId, sign);
-      }
+      applyCountDelta(productId, field, sign);
     }
   };
 
@@ -428,6 +434,7 @@ export function App() {
     setView("start");
     setCurrentForm(null);
     setCurrentCounts([]);
+    setActiveProductId(null);
   };
 
   // Export count as CSV
@@ -847,9 +854,25 @@ export function App() {
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-2xl font-bold text-indigo-600">
-                                    {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
-                                  </div>
+                                  {(!item.subCounts || item.subCounts.length <= 1) ? (
+                                    <div className="text-2xl font-bold text-indigo-600">
+                                      {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      {item.subCounts.map((sc, idx) => (
+                                        <div
+                                          key={idx}
+                                          className={`text-2xl font-bold text-indigo-600 leading-tight${idx === item.subCounts!.length - 1 ? " border-b-2 border-indigo-400 pb-0.5" : ""}`}
+                                        >
+                                          {sc.packageCount} 𐄹 + {sc.singleCount} = {sc.packageCount * item.packagingSize + sc.singleCount}
+                                        </div>
+                                      ))}
+                                      <div className="text-2xl font-bold text-indigo-600">
+                                        {item.packageCount} 𐄹 + {item.singleCount} = {getTotal(item)}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -921,6 +944,7 @@ export function App() {
                     onClick={() => {
                       setCurrentForm(null);
                       setCurrentCounts([]);
+                      setActiveProductId(null);
                     }}
                     className="flex-1 rounded-lg bg-slate-100 py-4 font-medium text-slate-700 hover:bg-slate-200 transition-colors"
                   >
