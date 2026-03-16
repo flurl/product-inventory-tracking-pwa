@@ -44,6 +44,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), viteSingleFile(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        clientsClaim: true,
+        skipWaiting: true,
+      },
+      devOptions: { enabled: true },
       manifest: {
         name: 'Product Inventory Tracker',
         short_name: 'ProductTracker',
