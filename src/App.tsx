@@ -54,7 +54,9 @@ export function App() {
   const sessionRecovered = useRef(false);
 
   // long-press dialog state
-  const longPressStart = useRef<number | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+  const [longPressingKey, setLongPressingKey] = useState<string | null>(null);
   const [numberDialogOpen, setNumberDialogOpen] = useState(false);
   const [numberDialogProduct, setNumberDialogProduct] = useState<{ productId: string; field: "single" | "package"; sign: 1 | -1 } | null>(null);
   const [numberDialogValue, setNumberDialogValue] = useState<string>("");
@@ -398,21 +400,35 @@ export function App() {
   };
 
   const handleCountButtonDown = (productId: string, field: "single" | "package", sign: 1 | -1) => {
-    longPressStart.current = Date.now();
+    const key = `${productId}-${field}-${sign}`;
+    longPressTriggered.current = false;
+    setLongPressingKey(key);
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setLongPressingKey(null);
+      openNumberDialogFor(productId, field, sign);
+    }, 600);
+  };
+
+  const handleCountButtonCancel = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+    longPressTriggered.current = false;
+    setLongPressingKey(null);
   };
 
   const handleCountButtonUp = (productId: string, field: "single" | "package", sign: 1 | -1) => {
-    if (!longPressStart.current) return;
-    const duration = Date.now() - longPressStart.current;
-    longPressStart.current = null;
-
-    if (duration >= 600) {
-      // Long press: open dialog
-      openNumberDialogFor(productId, field, sign);
-    } else {
-      // Short press: execute action
-      applyCountDelta(productId, field, sign);
+    if (longPressTriggered.current) {
+      // Dialog already opened by the timer — just clean up
+      longPressTriggered.current = false;
+      setLongPressingKey(null);
+      return;
     }
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
+    setLongPressingKey(null);
+    // Short press: execute action
+    applyCountDelta(productId, field, sign);
   };
 
   const getTotal = (item: CountItem) => item.packageCount * item.packagingSize + item.singleCount;
@@ -532,7 +548,7 @@ export function App() {
     }
   };
 
-  const APP_VERSION = "1.0.1";
+  const APP_VERSION = "1.1.0";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-4 md:p-8">
@@ -883,28 +899,36 @@ export function App() {
                                 <button
                                   onPointerDown={() => handleCountButtonDown(item.productId, "single", 1)}
                                   onPointerUp={() => handleCountButtonUp(item.productId, "single", 1)}
-                                  className="select-none rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-colors touch-manipulation"
+                                  onPointerCancel={handleCountButtonCancel}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  className={`select-none rounded-xl bg-green-100 py-3 font-medium text-green-700 hover:bg-green-200 transition-all touch-manipulation${longPressingKey === `${item.productId}-single-1` ? " scale-110 bg-green-300" : ""}`}
                                 >
                                   +1
                                 </button>
                                 <button
                                   onPointerDown={() => handleCountButtonDown(item.productId, "single", -1)}
                                   onPointerUp={() => handleCountButtonUp(item.productId, "single", -1)}
-                                  className="select-none rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-colors touch-manipulation"
+                                  onPointerCancel={handleCountButtonCancel}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  className={`select-none rounded-xl bg-red-100 py-3 font-medium text-red-700 hover:bg-red-200 transition-all touch-manipulation${longPressingKey === `${item.productId}-single--1` ? " scale-110 bg-red-300" : ""}`}
                                 >
                                   -1
                                 </button>
                                 <button
                                   onPointerDown={() => handleCountButtonDown(item.productId, "package", 1)}
                                   onPointerUp={() => handleCountButtonUp(item.productId, "package", 1)}
-                                  className="select-none rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-colors touch-manipulation"
+                                  onPointerCancel={handleCountButtonCancel}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  className={`select-none rounded-xl bg-emerald-100 py-3 font-medium text-emerald-700 hover:bg-emerald-200 transition-all touch-manipulation${longPressingKey === `${item.productId}-package-1` ? " scale-110 bg-emerald-300" : ""}`}
                                 >
                                   +{item.packagingSize}
                                 </button>
                                 <button
                                   onPointerDown={() => handleCountButtonDown(item.productId, "package", -1)}
                                   onPointerUp={() => handleCountButtonUp(item.productId, "package", -1)}
-                                  className="select-none rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-colors touch-manipulation"
+                                  onPointerCancel={handleCountButtonCancel}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                  className={`select-none rounded-xl bg-orange-100 py-3 font-medium text-orange-700 hover:bg-orange-200 transition-all touch-manipulation${longPressingKey === `${item.productId}-package--1` ? " scale-110 bg-orange-300" : ""}`}
                                 >
                                   -{item.packagingSize}
                                 </button>
