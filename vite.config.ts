@@ -47,6 +47,7 @@ export default defineConfig({
       workbox: {
         clientsClaim: true,
         skipWaiting: true,
+        dontCacheBustURLsMatching: /^$/,
       },
       devOptions: { enabled: true },
       manifest: {
