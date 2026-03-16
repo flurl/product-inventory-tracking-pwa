@@ -453,51 +453,39 @@ export function App() {
     setActiveProductId(null);
   };
 
-  // Export count as CSV
-  const exportCount = (count: SavedCount) => {
-    const date = new Date(count.timestamp);
-    const dateStr = date
+  const buildCountCsv = (count: SavedCount): string => {
+    let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
+    count.items.forEach(item => {
+      const total = getTotal(item);
+      csv += `"${item.productId}","${item.productName}",${item.packagingSize},${item.packageCount},${item.singleCount},${total}\n`;
+    });
+    return csv;
+  };
+
+  const countFilename = (count: SavedCount): string => {
+    const dateStr = new Date(count.timestamp)
       .toISOString()
       .replace(/[:.]/g, "-")
       .replace("T", "_")
       .slice(0, 19);
+    return `${count.formName}_${dateStr}.csv`;
+  };
 
-    const filename = `${count.formName}_${dateStr}.csv`;
-
-    let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
-    count.items.forEach(item => {
-      const total = getTotal(item);
-      csv += `${item.productId},${item.productName},${item.packagingSize},${item.packageCount},${item.singleCount},${total}\n`;
-    });
-
-    const blob = new Blob([csv], { type: "text/csv" });
+  // Export count as CSV
+  const exportCount = (count: SavedCount) => {
+    const blob = new Blob([buildCountCsv(count)], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = countFilename(count);
     a.click();
     URL.revokeObjectURL(url);
   };
 
   // Share count via Web Share API
   const shareCount = async (count: SavedCount) => {
-    const date = new Date(count.timestamp);
-    const dateStr = date
-      .toISOString()
-      .replace(/[:.]/g, "-")
-      .replace("T", "_")
-      .slice(0, 19);
-
-    const filename = `${count.formName}_${dateStr}.csv`;
-
-    let csv = "Product ID,Product Name,Packaging Size,Package Count,Single Count,Total\n";
-    count.items.forEach(item => {
-      const total = getTotal(item);
-      csv += `${item.productId},${item.productName},${item.packagingSize},${item.packageCount},${item.singleCount},${total}\n`;
-    });
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const file = new File([blob], filename, { type: "text/csv" });
+    const blob = new Blob([buildCountCsv(count)], { type: "text/csv" });
+    const file = new File([blob], countFilename(count), { type: "text/csv" });
 
     if (navigator.share) {
       try {
@@ -548,7 +536,7 @@ export function App() {
     }
   };
 
-  const APP_VERSION = "1.1.0";
+  const APP_VERSION = "1.1.2";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-zinc-100 p-4 md:p-8">
